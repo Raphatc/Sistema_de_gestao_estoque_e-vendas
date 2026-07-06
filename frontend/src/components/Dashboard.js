@@ -10,22 +10,24 @@ export default function Dashboard() {
 
   // ESTADOS DO POP-UP
   const [modalAberto, setModalAberto] = useState(false);
-  const [detalhesDoDia, setDetalhesDoDia] = useState({ data: '', vendas: [] });
+  const [detalhesDoDia, setDetalhesDoDia] = useState({ data: '', dataOriginal: '', vendas: [] });
+
+  // Transformado em uma função reutilizável para podermos recarregar o estoque após desfazer uma venda
+  const buscarDados = async () => {
+    try {
+      const resPods = await fetch('http://localhost:8080/api/pods');
+      if (resPods.ok) setPods(await resPods.json());
+
+      const resVendas = await fetch('http://localhost:8080/api/pods/vendas');
+      if (resVendas.ok) setVendas(await resVendas.json());
+    } catch (erro) {
+      console.error("Erro de conexão:", erro);
+    } finally {
+      setCarregando(false);
+    }
+  };
 
   useEffect(() => {
-    const buscarDados = async () => {
-      try {
-        const resPods = await fetch('http://localhost:8080/api/pods');
-        if (resPods.ok) setPods(await resPods.json());
-
-        const resVendas = await fetch('http://localhost:8080/api/pods/vendas');
-        if (resVendas.ok) setVendas(await resVendas.json());
-      } catch (erro) {
-        console.error("Erro de conexão:", erro);
-      } finally {
-        setCarregando(false);
-      }
-    };
     buscarDados();
   }, []);
 
@@ -73,38 +75,66 @@ export default function Dashboard() {
 
 
   // ==========================================
-  // NOVA FUNÇÃO: O CLIQUE INFALÍVEL
+  // FUNÇÃO DE ABRIR MODAL (AGORA LISTA INDIVIDUAL)
   // ==========================================
   const handleAbrirRelatorio = (dadosDoDia) => {
     if (!dadosDoDia || !dadosDoDia.dataOriginal) return;
 
+    // Pega todas as vendas individuais deste dia (sem agrupar, para podermos desfazer por ID)
     const vendasNesseDia = vendas.filter(v => v.dataVenda === dadosDoDia.dataOriginal);
-
-    const vendasAgrupadas = {};
-    vendasNesseDia.forEach(v => {
-      const chave = `${v.marca} - ${v.sabor}`;
-      if(!vendasAgrupadas[chave]) {
-        vendasAgrupadas[chave] = { marca: v.marca, sabor: v.sabor, quantidade: 0, total: 0 };
-      }
-      vendasAgrupadas[chave].quantidade += 1;
-      vendasAgrupadas[chave].total += v.faturamento;
-    });
 
     setDetalhesDoDia({
       data: dadosDoDia.data,
-      vendas: Object.values(vendasAgrupadas).sort((a, b) => b.quantidade - a.quantidade)
+      dataOriginal: dadosDoDia.dataOriginal,
+      vendas: vendasNesseDia
     });
     setModalAberto(true);
   };
 
-  // DESENHO DA NOSSA PRÓPRIA BOLINHA COM HITBOX GIGANTE
+  // ==========================================
+  // NOVA FUNÇÃO: DESFAZER VENDA
+  // ==========================================
+  const handleDesfazerVenda = async (idVenda) => {
+    const confirmacao = window.confirm(`Tem a certeza que deseja desfazer esta venda? O valor será removido e o estoque devolvido.`);
+
+    if (!confirmacao) return;
+
+    try {
+      // Faz a requisição DELETE para a API Java
+      const resposta = await fetch(`http://localhost:8080/api/pods/vendas/${idVenda}`, {
+        method: 'DELETE',
+      });
+
+      if (resposta.ok) {
+        alert('Venda desfeita com sucesso!');
+
+        // 1. Remove a venda visualmente da lista geral
+        setVendas(prevVendas => prevVendas.filter(v => v.id !== idVenda));
+
+        // 2. Remove a venda visualmente de dentro do Modal
+        setDetalhesDoDia(prevDetalhes => ({
+          ...prevDetalhes,
+          vendas: prevDetalhes.vendas.filter(v => v.id !== idVenda)
+        }));
+
+        // 3. Atualiza o estoque total buscando novamente da API
+        buscarDados();
+
+      } else {
+        alert('Erro ao desfazer a venda no servidor.');
+      }
+    } catch (erro) {
+      console.error('Erro de conexão:', erro);
+      alert('Erro de conexão com o servidor Java.');
+    }
+  };
+
+
   const BolinhaPersonalizada = (props) => {
     const { cx, cy, payload, stroke } = props;
     return (
       <g>
-        {/* HITBOX: Círculo invisível de 40 pixels (Fácil de acertar o clique) */}
         <circle cx={cx} cy={cy} r={25} fill="transparent" cursor="pointer" onClick={() => handleAbrirRelatorio(payload)} style={{ pointerEvents: 'all' }} />
-        {/* VISUAL: A bolinha que você realmente enxerga */}
         <circle cx={cx} cy={cy} r={7} stroke={stroke} strokeWidth={3} fill="#111827" style={{ pointerEvents: 'none' }} />
       </g>
     );
@@ -174,7 +204,6 @@ export default function Dashboard() {
 
           <div className="flex-1 min-h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              {/* Removido o onClick da raiz do gráfico que estava causando conflito */}
               <AreaChart data={dadosGraficoArea} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="corFaturamento" x1="0" y1="0" x2="0" y2="1">
@@ -196,7 +225,6 @@ export default function Dashboard() {
                   itemStyle={{ color: '#E5E7EB' }}
                 />
 
-                {/* AQUI ESTÁ A MÁGICA: A bolinha personalizada com a zona de clique gigante! */}
                 <Area type="monotone" name="Faturamento (R$)" dataKey="Faturamento" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#corFaturamento)" activeDot={<BolinhaPersonalizada />} />
                 <Area type="monotone" name="Lucro (R$)" dataKey="Lucro" stroke="#A855F7" strokeWidth={3} fillOpacity={1} fill="url(#corLucro)" activeDot={<BolinhaPersonalizada />} />
               </AreaChart>
@@ -255,7 +283,7 @@ export default function Dashboard() {
       </div>
 
       {/* ========================================== */}
-      {/* POP-UP (MODAL) REFORÇADO (z-[9999])        */}
+      {/* POP-UP (MODAL) COM BOTÃO DE DESFAZER         */}
       {/* ========================================== */}
       {modalAberto && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -265,8 +293,8 @@ export default function Dashboard() {
 
             <div className="flex justify-between items-center p-5 border-b border-gray-800 bg-gray-950/80">
               <div>
-                <h3 className="text-xl font-bold text-gray-100">Vendas do dia {detalhesDoDia.data}</h3>
-                <p className="text-xs text-gray-400 mt-1">Detalhes de movimentação</p>
+                <h3 className="text-xl font-bold text-gray-100">Transações de {detalhesDoDia.data}</h3>
+                <p className="text-xs text-gray-400 mt-1">Histórico exato do dia</p>
               </div>
               <button onClick={() => setModalAberto(false)} className="text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                 &times;
@@ -276,15 +304,23 @@ export default function Dashboard() {
             <div className="p-5 max-h-[60vh] overflow-y-auto custom-scrollbar">
               {detalhesDoDia.vendas.length > 0 ? (
                 <ul className="space-y-3">
-                  {detalhesDoDia.vendas.map((item, index) => (
-                    <li key={index} className="flex justify-between items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 hover:border-purple-500/30 transition-colors">
+                  {detalhesDoDia.vendas.map((item) => (
+                    <li key={item.id} className="flex justify-between items-center bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 hover:border-purple-500/30 transition-colors">
                       <div>
                         <p className="font-bold text-gray-200 text-lg">{item.marca}</p>
                         <p className="text-sm font-medium text-purple-400">{item.sabor}</p>
+                        <p className="text-xs text-gray-500 mt-1">ID da Venda: #{item.id}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-green-400 text-lg bg-green-900/20 px-2 py-0.5 rounded inline-block">{item.quantidade} un.</p>
-                        <p className="text-xs font-medium text-gray-400 mt-1">Recibo: {formatarMoeda(item.total)}</p>
+                      <div className="flex flex-col items-end gap-2">
+                        <p className="font-bold text-green-400 text-lg bg-green-900/20 px-2 py-0.5 rounded inline-block">
+                          {formatarMoeda(item.faturamento)}
+                        </p>
+                        <button
+                          onClick={() => handleDesfazerVenda(item.id)}
+                          className="text-[10px] uppercase tracking-wider font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded transition-colors"
+                        >
+                          Desfazer Venda
+                        </button>
                       </div>
                     </li>
                   ))}

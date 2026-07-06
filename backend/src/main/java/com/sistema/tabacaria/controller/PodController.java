@@ -128,4 +128,28 @@ public class PodController {
             return ResponseEntity.ok(repository.save(pod));
         }).orElse(ResponseEntity.notFound().build());
     }
+    // <-- NOVO: Desfaz uma VENDA ESPECÍFICA pelo ID da Venda (Para o Gráfico do Dashboard) -->
+    @DeleteMapping("/vendas/{id}")
+    public ResponseEntity<String> desfazerVendaPorId(@PathVariable Long id) {
+        return vendaRepository.findById(id).map(venda -> {
+
+            // 1. Procura o Pod que tem a mesma marca e sabor desta venda
+            List<Pod> pods = repository.findAll();
+            for (Pod pod : pods) {
+                if (pod.getMarca().equals(venda.getMarca()) && pod.getSabor().equals(venda.getSabor())) {
+                    // 2. Devolve o item ao estoque e retira dos vendidos
+                    pod.setEstoque(pod.getEstoque() + 1);
+                    pod.setVendidos(pod.getVendidos() > 0 ? pod.getVendidos() - 1 : 0);
+                    repository.save(pod);
+                    break; // Para a busca assim que encontrar o Pod correto
+                }
+            }
+
+            // 3. Apaga a venda específica do histórico financeiro
+            vendaRepository.deleteById(id);
+
+            return ResponseEntity.ok("Venda desfeita e estoque atualizado com sucesso!");
+
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }
