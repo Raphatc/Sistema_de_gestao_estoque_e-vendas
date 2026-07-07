@@ -18,7 +18,7 @@ export default function CadastroPod() {
   useEffect(() => {
     const buscarMarcas = async () => {
       try {
-        const resposta = await fetch('http://localhost:8080/api/pods');
+        const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods');
         if (resposta.ok) {
           const dados = await resposta.json();
           
@@ -99,7 +99,7 @@ export default function CadastroPod() {
           imagemUrl: previewUrl
         };
 
-        return fetch('http://localhost:8080/api/pods', {
+        return fetch('http://https://tabacaria-system.onrender.com/api/pods', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dadosPod),

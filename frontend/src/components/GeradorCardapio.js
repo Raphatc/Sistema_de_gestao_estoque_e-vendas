@@ -52,7 +52,7 @@ export default function GeradorCardapio() {
   useEffect(() => {
     const buscarEAgruparPods = async () => {
       try {
-        const resposta = await fetch('http://localhost:8080/api/pods');
+        const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods');
         if (resposta.ok) {
           const dados = await resposta.json();
 

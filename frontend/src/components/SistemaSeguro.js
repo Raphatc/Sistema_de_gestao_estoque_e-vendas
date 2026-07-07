@@ -23,7 +23,7 @@ export default function SistemaSeguro({ children }) {
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
       let [resource, config] = args;
-      if (typeof resource === 'string' && resource.includes('localhost:8080')) {
+      if (typeof resource === 'string' && resource.includes('https://tabacaria-system.onrender.com')) {
         config = config || {};
         config.headers = {
           ...config.headers,
@@ -44,7 +44,7 @@ export default function SistemaSeguro({ children }) {
 
     try {
       // Bate na porta do Java para testar se a chave é válida
-      const resposta = await fetch('http://localhost:8080/api/pods', {
+      const resposta = await fetch('http://https://tabacaria-system.onrender.com/api/pods', {
         headers: { 'Authorization': `Basic ${tokenTentativa}` }
       });
 

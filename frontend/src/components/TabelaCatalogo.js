@@ -18,7 +18,7 @@ export default function TabelaCatalogo() {
 
   const buscarEAgruparPods = async () => {
     try {
-      const resposta = await fetch('http://localhost:8080/api/pods');
+      const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods');
       if (resposta.ok) {
         const dados = await resposta.json();
 
@@ -54,7 +54,7 @@ export default function TabelaCatalogo() {
   // ==========================================
   const handleVender = async (id) => {
     try {
-      const resposta = await fetch(`http://localhost:8080/api/pods/${id}/vender`, { method: 'PUT' });
+      const resposta = await fetch(`http://https://tabacaria-system.onrender.com/api/pods/${id}/vender`, { method: 'PUT' });
       if (resposta.ok) buscarEAgruparPods();
       else alert("Erro: Estoque insuficiente!");
     } catch (erro) { console.error('Erro ao vender:', erro); }
@@ -63,7 +63,7 @@ export default function TabelaCatalogo() {
   const handleDesfazerVenda = async (id, vendidos) => {
     if (vendidos === 0) return alert("Não há vendas para desfazer neste sabor.");
     try {
-      const resposta = await fetch(`http://localhost:8080/api/pods/${id}/desfazer-venda`, { method: 'PUT' });
+      const resposta = await fetch(`http://https://tabacaria-system.onrender.com/api/pods/${id}/desfazer-venda`, { method: 'PUT' });
       if (resposta.ok) buscarEAgruparPods();
     } catch (erro) { console.error('Erro ao desfazer:', erro); }
   };
@@ -79,14 +79,14 @@ export default function TabelaCatalogo() {
       if (tipo === 'ADICIONAR') {
         const quantidade = parseInt(form.val1);
         if (quantidade > 0) {
-          await fetch(`http://localhost:8080/api/pods/${dados.id}/adicionar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
+          await fetch(`http://https://tabacaria-system.onrender.com/api/pods/${dados.id}/adicionar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
         }
       }
 
       else if (tipo === 'AJUSTAR') {
         const quantidade = parseInt(form.val1);
         if (quantidade >= 0) {
-          await fetch(`http://localhost:8080/api/pods/${dados.id}/ajustar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
+          await fetch(`http://https://tabacaria-system.onrender.com/api/pods/${dados.id}/ajustar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
         }
       }
 
@@ -94,12 +94,12 @@ export default function TabelaCatalogo() {
         const data = form.val1; // O input type="date" já entrega no formato AAAA-MM-DD do Java
         const quantidade = parseInt(form.val2);
         if (data && quantidade > 0) {
-          await fetch(`http://localhost:8080/api/pods/${dados.id}/venda-retroativa?data=${data}&quantidade=${quantidade}`, { method: 'POST' });
+          await fetch(`http://https://tabacaria-system.onrender.com/api/pods/${dados.id}/venda-retroativa?data=${data}&quantidade=${quantidade}`, { method: 'POST' });
         }
       }
 
       else if (tipo === 'EXCLUIR') {
-        await fetch(`http://localhost:8080/api/pods/${dados.id}`, { method: 'DELETE' });
+        await fetch(`http://https://tabacaria-system.onrender.com/api/pods/${dados.id}`, { method: 'DELETE' });
       }
 
       else if (tipo === 'EDITAR_PRECOS') {
@@ -107,7 +107,7 @@ export default function TabelaCatalogo() {
         const varejo = parseFloat(form.val2.replace(',', '.'));
         if (!isNaN(atacado) && !isNaN(varejo)) {
           await Promise.all(dados.sabores.map(sabor => {
-            return fetch(`http://localhost:8080/api/pods/${sabor.id}/precos?atacado=${atacado}&varejo=${varejo}`, { method: 'PUT' });
+            return fetch(`http://https://tabacaria-system.onrender.com/api/pods/${sabor.id}/precos?atacado=${atacado}&varejo=${varejo}`, { method: 'PUT' });
           }));
         }
       }
