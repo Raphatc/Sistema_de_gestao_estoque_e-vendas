@@ -1,5 +1,5 @@
 # Etapa 1: Preparar e Compilar
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /app
 
 # Copia todos os arquivos do projeto para o contêiner
@@ -12,7 +12,7 @@ RUN cd backend && mvn clean package -DskipTests
 RUN mv backend/target/*.jar app.jar
 
 # Etapa 2: Criar o Servidor Leve e Rápido
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 # Pega apenas o pacote final pronto da etapa anterior
