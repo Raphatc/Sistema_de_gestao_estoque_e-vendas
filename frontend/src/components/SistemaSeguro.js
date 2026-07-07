@@ -44,7 +44,7 @@ export default function SistemaSeguro({ children }) {
 
     try {
       // Bate na porta do Java para testar se a chave é válida
-      const resposta = await fetch('http://https://tabacaria-system.onrender.com/api/pods', {
+      const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods', {
         headers: { 'Authorization': `Basic ${tokenTentativa}` }
       });
 

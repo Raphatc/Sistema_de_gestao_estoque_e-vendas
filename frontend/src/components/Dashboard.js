@@ -15,10 +15,10 @@ export default function Dashboard() {
   // Transformado em uma função reutilizável para podermos recarregar o estoque após desfazer uma venda
   const buscarDados = async () => {
     try {
-      const resPods = await fetch('http://https://tabacaria-system.onrender.com/api/pods');
+      const resPods = await fetch('https://tabacaria-system.onrender.com/api/pods');
       if (resPods.ok) setPods(await resPods.json());
 
-      const resVendas = await fetch('http://https://tabacaria-system.onrender.com/api/pods/vendas');
+      const resVendas = await fetch('https://tabacaria-system.onrender.com/api/pods/vendas');
       if (resVendas.ok) setVendas(await resVendas.json());
     } catch (erro) {
       console.error("Erro de conexão:", erro);
@@ -101,7 +101,7 @@ export default function Dashboard() {
 
     try {
       // Faz a requisição DELETE para a API Java
-      const resposta = await fetch(`http://https://tabacaria-system.onrender.com/api/pods/vendas/${idVenda}`, {
+      const resposta = await fetch(`https://tabacaria-system.onrender.com/api/pods/vendas/${idVenda}`, {
         method: 'DELETE',
       });
 

@@ -99,7 +99,7 @@ export default function CadastroPod() {
           imagemUrl: previewUrl
         };
 
-        return fetch('http://https://tabacaria-system.onrender.com/api/pods', {
+        return fetch('https://tabacaria-system.onrender.com/api/pods', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dadosPod),
