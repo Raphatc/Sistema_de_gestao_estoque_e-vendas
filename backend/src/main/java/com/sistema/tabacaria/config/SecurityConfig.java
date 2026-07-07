@@ -70,8 +70,10 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // Quando for colocar na internet de verdade, colocaremos o link oficial do site aqui:
-        configuration.setAllowedOrigins(Arrays.asList(
+        // Trocamos setAllowedOrigins por setAllowedOriginPatterns
+        configuration.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:3000",
+                "https://*.vercel.app", // O asterisco libera qualquer link da Vercel
                 "https://tabacaria-system.vercel.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
