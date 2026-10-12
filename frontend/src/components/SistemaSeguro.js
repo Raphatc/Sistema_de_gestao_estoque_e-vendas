@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 
 export default function SistemaSeguro({ children }) {
   const [token, setToken] = useState(null);
@@ -18,12 +19,78 @@ export default function SistemaSeguro({ children }) {
     setCarregando(false);
   }, []);
 
+  // Notificações de fiado: 1 dia antes e no dia do vencimento (qualquer tela logada)
+  useEffect(() => {
+    if (!token) return;
+
+    const dataLocalISO = (date = new Date()) => {
+      const ano = date.getFullYear();
+      const mes = String(date.getMonth() + 1).padStart(2, '0');
+      const dia = String(date.getDate()).padStart(2, '0');
+      return `${ano}-${mes}-${dia}`;
+    };
+
+    const formatarMoeda = (valor) =>
+      (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const formatarDataBR = (dataISO) =>
+      dataISO ? dataISO.split('-').reverse().join('/') : '—';
+
+    const verificar = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/pods/vendas`);
+        if (!res.ok) return;
+        const vendas = await res.json();
+        const abertas = vendas.filter(v => v.statusPagamento === 'A_PRAZO' && v.dataVencimento);
+        if (abertas.length === 0) return;
+
+        const hojeStr = dataLocalISO();
+        const amanha = new Date();
+        amanha.setDate(amanha.getDate() + 1);
+        const amanhaStr = dataLocalISO(amanha);
+
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'default') {
+          try { await Notification.requestPermission(); } catch (e) {}
+        }
+        if (Notification.permission !== 'granted') return;
+
+        abertas.forEach(v => {
+          let tipo = null;
+          let titulo = '';
+          let corpo = '';
+          if (v.dataVencimento === hojeStr) {
+            tipo = 'hoje';
+            titulo = 'Pagamento de fiado hoje';
+            corpo = `${v.marca} — ${v.sabor}: ${formatarMoeda(v.faturamento)} vence hoje (${formatarDataBR(v.dataVencimento)}).`;
+          } else if (v.dataVencimento === amanhaStr) {
+            tipo = 'amanha';
+            titulo = 'Pagamento de fiado amanhã';
+            corpo = `${v.marca} — ${v.sabor}: ${formatarMoeda(v.faturamento)} vence amanhã (${formatarDataBR(v.dataVencimento)}).`;
+          }
+          if (!tipo) return;
+
+          const chave = `fiado-notif-${v.id}-${tipo}-${hojeStr}`;
+          if (localStorage.getItem(chave)) return;
+          try {
+            new Notification(titulo, { body: corpo, tag: chave });
+            localStorage.setItem(chave, '1');
+          } catch (e) {}
+        });
+      } catch (e) {}
+    };
+
+    verificar();
+    const intervalo = setInterval(verificar, 5 * 60 * 1000);
+    return () => clearInterval(intervalo);
+  }, [token]);
+
   // O "Guardião": Adiciona o crachá de acesso em TODAS as conversas com o Java
   const ativarInterceptor = (tokenAtivo) => {
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
       let [resource, config] = args;
-      if (typeof resource === 'string' && resource.includes('https://tabacaria-system.onrender.com')) {
+      if (typeof resource === 'string' && resource.startsWith(API_URL)) {
         config = config || {};
         config.headers = {
           ...config.headers,
@@ -44,7 +111,7 @@ export default function SistemaSeguro({ children }) {
 
     try {
       // Bate na porta do Java para testar se a chave é válida
-      const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods', {
+      const resposta = await fetch(`${API_URL}/api/pods`, {
         headers: { 'Authorization': `Basic ${tokenTentativa}` }
       });
 

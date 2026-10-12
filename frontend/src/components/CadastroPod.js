@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 
 export default function CadastroPod() {
   // Estado para controlar se é uma marca nova ou existente
@@ -18,7 +19,7 @@ export default function CadastroPod() {
   useEffect(() => {
     const buscarMarcas = async () => {
       try {
-        const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods');
+        const resposta = await fetch(`${API_URL}/api/pods`);
         if (resposta.ok) {
           const dados = await resposta.json();
           
@@ -99,7 +100,7 @@ export default function CadastroPod() {
           imagemUrl: previewUrl
         };
 
-        return fetch('https://tabacaria-system.onrender.com/api/pods', {
+        return fetch(`${API_URL}/api/pods`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dadosPod),

@@ -17,4 +17,9 @@ public class Venda {
     private Double faturamento;
     private Double lucro;
     private LocalDate dataVenda;
+
+    private String statusPagamento = "PAGO"; // "PAGO" ou "A_PRAZO"
+
+    /** Data combinada para o cliente pagar (só faz sentido em A_PRAZO). */
+    private LocalDate dataVencimento;
 }

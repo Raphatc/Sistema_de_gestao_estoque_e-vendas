@@ -1,24 +1,51 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { API_URL } from '../config/api';
 
 export default function Dashboard() {
   const [pods, setPods] = useState([]);
   const [vendas, setVendas] = useState([]);
+  const [caixa, setCaixa] = useState({ saldo: 0, gastoMercadoria: 0, divida: 0 });
+  const [formCaixa, setFormCaixa] = useState({ saldo: '', gastoMercadoria: '' });
+  const [salvandoCaixa, setSalvandoCaixa] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [diasFiltro, setDiasFiltro] = useState(7);
+  const [alertasVencimento, setAlertasVencimento] = useState([]);
 
   // ESTADOS DO POP-UP
   const [modalAberto, setModalAberto] = useState(false);
   const [detalhesDoDia, setDetalhesDoDia] = useState({ data: '', dataOriginal: '', vendas: [] });
 
-  // Transformado em uma função reutilizável para podermos recarregar o estoque após desfazer uma venda
+  const dataLocalISO = (date = new Date()) => {
+    const ano = date.getFullYear();
+    const mes = String(date.getMonth() + 1).padStart(2, '0');
+    const dia = String(date.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+  };
+
+  const formatarDataBR = (dataISO) => {
+    if (!dataISO) return '—';
+    return dataISO.split('-').reverse().join('/');
+  };
+
   const buscarDados = async () => {
     try {
-      const resPods = await fetch('https://tabacaria-system.onrender.com/api/pods');
+      const respCaixa = await fetch(`${API_URL}/api/caixa`);
+      if (respCaixa.ok) {
+        const dados = await respCaixa.json();
+        setCaixa(dados);
+        setFormCaixa({
+          saldo: dados.saldo != null ? String(dados.saldo) : '',
+          gastoMercadoria: dados.gastoMercadoria != null ? String(dados.gastoMercadoria) : ''
+        });
+      }
+    } catch (e) {}
+    try {
+      const resPods = await fetch(`${API_URL}/api/pods`);
       if (resPods.ok) setPods(await resPods.json());
 
-      const resVendas = await fetch('https://tabacaria-system.onrender.com/api/pods/vendas');
+      const resVendas = await fetch(`${API_URL}/api/pods/vendas`);
       if (resVendas.ok) setVendas(await resVendas.json());
     } catch (erro) {
       console.error("Erro de conexão:", erro);
@@ -30,6 +57,43 @@ export default function Dashboard() {
   useEffect(() => {
     buscarDados();
   }, []);
+
+  useEffect(() => {
+    const abertas = vendas.filter(v => v.statusPagamento === 'A_PRAZO' && v.dataVencimento);
+    if (abertas.length === 0) {
+      setAlertasVencimento([]);
+      return;
+    }
+
+    const hojeStr = dataLocalISO();
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    const amanhaStr = dataLocalISO(amanha);
+
+    const alertas = abertas
+      .map(v => {
+        if (v.dataVencimento === hojeStr) {
+          return {
+            id: v.id,
+            tipo: 'hoje',
+            titulo: 'Pagamento de fiado hoje',
+            texto: `${v.marca} — ${v.sabor}: ${(Number(v.faturamento) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} vence hoje (${formatarDataBR(v.dataVencimento)}).`
+          };
+        }
+        if (v.dataVencimento === amanhaStr) {
+          return {
+            id: v.id,
+            tipo: 'amanha',
+            titulo: 'Pagamento de fiado amanhã',
+            texto: `${v.marca} — ${v.sabor}: ${(Number(v.faturamento) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} vence amanhã (${formatarDataBR(v.dataVencimento)}).`
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    setAlertasVencimento(alertas);
+  }, [vendas]);
 
   const estoqueTotal = pods.reduce((acc, pod) => acc + pod.estoque, 0);
   const statsMarcas = {};
@@ -71,8 +135,69 @@ export default function Dashboard() {
   });
   const dadosGraficoTop = Object.values(vendasPorMarca).sort((a, b) => b.Vendas - a.Vendas).slice(0, 5);
 
-  const formatarMoeda = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatarMoeda = (valor) => (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  const vendasAPrazo = vendas.filter(v => v.statusPagamento === 'A_PRAZO');
+
+  const salvarCaixa = async (recalcularDivida = false) => {
+    setSalvandoCaixa(true);
+    try {
+      const payload = {
+        saldo: parseFloat(String(formCaixa.saldo).replace(',', '.')) || 0,
+        gastoMercadoria: parseFloat(String(formCaixa.gastoMercadoria).replace(',', '.')) || 0
+      };
+      const url = recalcularDivida
+        ? `${API_URL}/api/caixa?recalcularDivida=true`
+        : `${API_URL}/api/caixa`;
+      const resp = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (resp.ok) {
+        const dados = await resp.json();
+        setCaixa(dados);
+        setFormCaixa({
+          saldo: dados.saldo != null ? String(dados.saldo) : '',
+          gastoMercadoria: dados.gastoMercadoria != null ? String(dados.gastoMercadoria) : ''
+        });
+      } else {
+        alert('Erro ao salvar o caixa.');
+      }
+    } catch (erro) {
+      console.error('Erro ao salvar caixa:', erro);
+      alert('Erro de conexão ao salvar o caixa.');
+    } finally {
+      setSalvandoCaixa(false);
+    }
+  };
+
+  const handleMarcarComoPaga = async (idVenda) => {
+    const confirmacao = window.confirm('Marcar esta venda a prazo como paga? O valor entrará no caixa e abaterá a dívida.');
+    if (!confirmacao) return false;
+
+    try {
+      const resposta = await fetch(`${API_URL}/api/pods/vendas/${idVenda}/pagar`, {
+        method: 'PUT'
+      });
+      if (resposta.ok) {
+        await buscarDados();
+        setDetalhesDoDia(prev => ({
+          ...prev,
+          vendas: prev.vendas.map(v =>
+            v.id === idVenda ? { ...v, statusPagamento: 'PAGO' } : v
+          )
+        }));
+        return true;
+      }
+      alert('Não foi possível marcar a venda como paga.');
+      return false;
+    } catch (erro) {
+      console.error('Erro ao marcar venda como paga:', erro);
+      alert('Erro de conexão com o servidor.');
+      return false;
+    }
+  };
 
   // ==========================================
   // FUNÇÃO DE ABRIR MODAL (AGORA LISTA INDIVIDUAL)
@@ -101,7 +226,7 @@ export default function Dashboard() {
 
     try {
       // Faz a requisição DELETE para a API Java
-      const resposta = await fetch(`https://tabacaria-system.onrender.com/api/pods/vendas/${idVenda}`, {
+      const resposta = await fetch(`${API_URL}/api/pods/vendas/${idVenda}`, {
         method: 'DELETE',
       });
 
@@ -144,6 +269,24 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 relative">
+
+      {alertasVencimento.length > 0 && (
+        <div className="space-y-2">
+          {alertasVencimento.map(alerta => (
+            <div
+              key={`${alerta.id}-${alerta.tipo}`}
+              className={`border rounded-xl p-4 ${
+                alerta.tipo === 'hoje'
+                  ? 'bg-red-900/20 border-red-500/40 text-red-200'
+                  : 'bg-orange-900/20 border-orange-500/40 text-orange-200'
+              }`}
+            >
+              <p className="font-bold text-sm uppercase tracking-wide mb-1">{alerta.titulo}</p>
+              <p className="text-sm">{alerta.texto}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
         <h2 className="text-2xl font-bold text-gray-100 flex items-center gap-3">
@@ -254,6 +397,164 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ========================================== */}
+      {/* CAIXA E DÍVIDAS                            */}
+      {/* ========================================== */}
+      <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-xl mt-6">
+        <h3 className="text-lg font-bold text-gray-300 mb-2 flex items-center gap-2">
+          <span>Caixa e Financeiro</span>
+        </h3>
+        <p className="text-xs text-gray-500 mb-6">
+          Vendas à vista entram no saldo e abatem a dívida. Aumentar o gasto com mercadoria aumenta a dívida na mesma proporção.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
+            <label className="block text-sm font-medium text-gray-400 mb-2">Dinheiro em Caixa</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formCaixa.saldo}
+              onChange={(e) => setFormCaixa({ ...formCaixa, saldo: e.target.value })}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-purple-500 outline-none"
+            />
+          </div>
+
+          <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
+            <label className="block text-sm font-medium text-gray-400 mb-2">Gasto com Mercadoria</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formCaixa.gastoMercadoria}
+              onChange={(e) => setFormCaixa({ ...formCaixa, gastoMercadoria: e.target.value })}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-purple-500 outline-none"
+            />
+          </div>
+
+          {(() => {
+            const saldoAtual = Number(caixa?.saldo) || 0;
+            const dividaAtual = Number(caixa?.divida) || 0;
+            const caixaMaiorQueDivida = saldoAtual > dividaAtual;
+
+            if (caixaMaiorQueDivida) {
+              const sobraAposDivida = saldoAtual - dividaAtual;
+              return (
+                <div className="p-4 rounded-xl border bg-green-900/20 border-green-500/30 flex flex-col justify-center">
+                  <span className="text-sm font-medium text-gray-400">Sobra após pagar a dívida</span>
+                  <span className="text-3xl font-bold text-green-400">
+                    {formatarMoeda(sobraAposDivida)}
+                  </span>
+                </div>
+              );
+            }
+
+            return (
+              <div className="p-4 rounded-xl border bg-red-900/20 border-red-500/30 flex flex-col justify-center">
+                <span className="text-sm font-medium text-gray-400">Devendo (Dívida Restante)</span>
+                <span className="text-3xl font-bold text-red-400">
+                  {formatarMoeda(dividaAtual)}
+                </span>
+              </div>
+            );
+          })()}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          <button
+            type="button"
+            disabled={salvandoCaixa}
+            onClick={() => salvarCaixa(false)}
+            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl transition-colors"
+          >
+            {salvandoCaixa ? 'Salvando...' : 'Salvar Caixa'}
+          </button>
+          <button
+            type="button"
+            disabled={salvandoCaixa}
+            onClick={() => {
+              if (window.confirm('Recalcular a dívida como (gasto − saldo)? Isso redefine a dívida atual.')) {
+                salvarCaixa(true);
+              }
+            }}
+            className="bg-gray-800 hover:bg-gray-700 border border-gray-700 disabled:opacity-50 text-gray-200 font-medium px-5 py-2.5 rounded-xl transition-colors"
+          >
+            Recalcular dívida (gasto − saldo)
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* VENDAS A PRAZO (FIADO)                     */}
+      {/* ========================================== */}
+      <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-xl mt-6">
+        <h3 className="text-lg font-bold text-gray-300 mb-2 flex items-center gap-2">
+          <span>Vendas a Prazo (Fiado)</span>
+          {vendasAPrazo.length > 0 && (
+            <span className="text-xs bg-orange-900/40 text-orange-300 border border-orange-500/30 px-2 py-0.5 rounded-full">
+              {vendasAPrazo.length}
+            </span>
+          )}
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Quando o cliente pagar, marque como pago para entrar no caixa e abater a dívida.
+        </p>
+
+        {vendasAPrazo.length > 0 ? (
+          <ul className="space-y-3">
+            {vendasAPrazo.map((item) => {
+              const hojeStr = dataLocalISO();
+              const amanha = new Date();
+              amanha.setDate(amanha.getDate() + 1);
+              const amanhaStr = dataLocalISO(amanha);
+              const vencido = item.dataVencimento && item.dataVencimento < hojeStr;
+              const venceHoje = item.dataVencimento === hojeStr;
+              const venceAmanha = item.dataVencimento === amanhaStr;
+
+              let borda = 'border-orange-500/20';
+              let badge = null;
+              if (vencido) {
+                borda = 'border-red-500/50';
+                badge = <span className="text-[10px] uppercase font-bold bg-red-500/20 text-red-300 px-2 py-0.5 rounded">Vencido</span>;
+              } else if (venceHoje) {
+                borda = 'border-red-500/40';
+                badge = <span className="text-[10px] uppercase font-bold bg-red-500/20 text-red-300 px-2 py-0.5 rounded">Vence hoje</span>;
+              } else if (venceAmanha) {
+                borda = 'border-orange-500/50';
+                badge = <span className="text-[10px] uppercase font-bold bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded">Vence amanhã</span>;
+              }
+
+              return (
+              <li key={item.id} className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-gray-800/40 p-4 rounded-xl border ${borda}`}>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-gray-200">{item.marca} <span className="text-purple-400 font-medium">— {item.sabor}</span></p>
+                    {badge}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Venda: {formatarDataBR(item.dataVenda)} · Pagamento: {formatarDataBR(item.dataVencimento)} · ID #{item.id}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-orange-300">{formatarMoeda(item.faturamento)}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleMarcarComoPaga(item.id)}
+                    className="text-xs uppercase tracking-wider font-bold bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500 hover:text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Marcar como pago
+                  </button>
+                </div>
+              </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="text-sm text-gray-500 bg-gray-800/30 border border-gray-800 rounded-xl p-4">
+            Nenhuma venda a prazo em aberto.
+          </div>
+        )}
+      </div>
+
       <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-xl mt-6">
         <h3 className="text-lg font-bold text-gray-300 mb-6 flex items-center gap-2">
           <span>📦 Variedade em Estoque (Sabores Disponíveis por Marca)</span>
@@ -309,12 +610,27 @@ export default function Dashboard() {
                       <div>
                         <p className="font-bold text-gray-200 text-lg">{item.marca}</p>
                         <p className="text-sm font-medium text-purple-400">{item.sabor}</p>
-                        <p className="text-xs text-gray-500 mt-1">ID da Venda: #{item.id}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          ID #{item.id}
+                          {item.statusPagamento === 'A_PRAZO' ? (
+                            <span className="ml-2 text-orange-400">· A prazo</span>
+                          ) : (
+                            <span className="ml-2 text-green-500">· Pago</span>
+                          )}
+                        </p>
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <p className="font-bold text-green-400 text-lg bg-green-900/20 px-2 py-0.5 rounded inline-block">
+                        <p className={`font-bold text-lg px-2 py-0.5 rounded inline-block ${item.statusPagamento === 'A_PRAZO' ? 'text-orange-300 bg-orange-900/20' : 'text-green-400 bg-green-900/20'}`}>
                           {formatarMoeda(item.faturamento)}
                         </p>
+                        {item.statusPagamento === 'A_PRAZO' && (
+                          <button
+                            onClick={() => handleMarcarComoPaga(item.id)}
+                            className="text-[10px] uppercase tracking-wider font-bold bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500 hover:text-white px-3 py-1.5 rounded transition-colors"
+                          >
+                            Marcar como pago
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDesfazerVenda(item.id)}
                           className="text-[10px] uppercase tracking-wider font-bold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded transition-colors"
