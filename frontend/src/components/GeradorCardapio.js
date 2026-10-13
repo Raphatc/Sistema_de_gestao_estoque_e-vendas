@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 
 export default function GeradorCardapio() {
   const [podsAgrupados, setPodsAgrupados] = useState([]);
@@ -52,7 +53,7 @@ export default function GeradorCardapio() {
   useEffect(() => {
     const buscarEAgruparPods = async () => {
       try {
-        const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods');
+        const resposta = await fetch(`${API_URL}/api/pods`);
         if (resposta.ok) {
           const dados = await resposta.json();
 

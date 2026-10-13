@@ -1,24 +1,26 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 
 export default function TabelaCatalogo() {
   const [podsAgrupados, setPodsAgrupados] = useState([]);
+  const [termoBusca, setTermoBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
 
   // ==========================================
   // GERENCIADOR CENTRAL DE MODAIS (POP-UPS)
   // ==========================================
   const [modal, setModal] = useState({ aberto: false, tipo: '', dados: null });
-  const [form, setForm] = useState({ val1: '', val2: '' });
+  const [form, setForm] = useState({ val1: '', val2: '', val3: '' });
 
   const fecharModal = () => {
     setModal({ aberto: false, tipo: '', dados: null });
-    setForm({ val1: '', val2: '' });
+    setForm({ val1: '', val2: '', val3: '' });
   };
 
   const buscarEAgruparPods = async () => {
     try {
-      const resposta = await fetch('https://tabacaria-system.onrender.com/api/pods');
+      const resposta = await fetch(`${API_URL}/api/pods`);
       if (resposta.ok) {
         const dados = await resposta.json();
 
@@ -52,18 +54,19 @@ export default function TabelaCatalogo() {
   // ==========================================
   // AÇÕES IMEDIATAS (Não precisam de Pop-up)
   // ==========================================
-  const handleVender = async (id) => {
-    try {
-      const resposta = await fetch(`https://tabacaria-system.onrender.com/api/pods/${id}/vender`, { method: 'PUT' });
-      if (resposta.ok) buscarEAgruparPods();
-      else alert("Erro: Estoque insuficiente!");
-    } catch (erro) { console.error('Erro ao vender:', erro); }
+  const handleVender = (sabor, marca) => {
+    setForm({
+      val1: 'A_VISTA',
+      val2: sabor.precoVarejo ? sabor.precoVarejo.toString() : '',
+      val3: ''
+    });
+    setModal({ aberto: true, tipo: 'VENDER', dados: { ...sabor, marca } });
   };
 
   const handleDesfazerVenda = async (id, vendidos) => {
     if (vendidos === 0) return alert("Não há vendas para desfazer neste sabor.");
     try {
-      const resposta = await fetch(`https://tabacaria-system.onrender.com/api/pods/${id}/desfazer-venda`, { method: 'PUT' });
+      const resposta = await fetch(`${API_URL}/api/pods/${id}/desfazer-venda`, { method: 'PUT' });
       if (resposta.ok) buscarEAgruparPods();
     } catch (erro) { console.error('Erro ao desfazer:', erro); }
   };
@@ -79,14 +82,14 @@ export default function TabelaCatalogo() {
       if (tipo === 'ADICIONAR') {
         const quantidade = parseInt(form.val1);
         if (quantidade > 0) {
-          await fetch(`https://tabacaria-system.onrender.com/api/pods/${dados.id}/adicionar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
+          await fetch(`${API_URL}/api/pods/${dados.id}/adicionar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
         }
       }
 
       else if (tipo === 'AJUSTAR') {
         const quantidade = parseInt(form.val1);
         if (quantidade >= 0) {
-          await fetch(`https://tabacaria-system.onrender.com/api/pods/${dados.id}/ajustar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
+          await fetch(`${API_URL}/api/pods/${dados.id}/ajustar-estoque?quantidade=${quantidade}`, { method: 'PUT' });
         }
       }
 
@@ -94,20 +97,39 @@ export default function TabelaCatalogo() {
         const data = form.val1; // O input type="date" já entrega no formato AAAA-MM-DD do Java
         const quantidade = parseInt(form.val2);
         if (data && quantidade > 0) {
-          await fetch(`https://tabacaria-system.onrender.com/api/pods/${dados.id}/venda-retroativa?data=${data}&quantidade=${quantidade}`, { method: 'POST' });
+          await fetch(`${API_URL}/api/pods/${dados.id}/venda-retroativa?data=${data}&quantidade=${quantidade}`, { method: 'POST' });
         }
       }
 
       else if (tipo === 'EXCLUIR') {
-        await fetch(`https://tabacaria-system.onrender.com/api/pods/${dados.id}`, { method: 'DELETE' });
+        await fetch(`${API_URL}/api/pods/${dados.id}`, { method: 'DELETE' });
       }
 
+      else if (tipo === 'VENDER') {
+        const tipoVenda = form.val1;
+        const precoPersonalizado = parseFloat(form.val2.replace(',', '.'));
+
+        if (tipoVenda === 'A_PRAZO' && !form.val3) {
+          alert('Informe a data em que o cliente vai pagar.');
+          return;
+        }
+
+        let url = `${API_URL}/api/pods/${dados.id}/vender?tipoVenda=${tipoVenda}`;
+        if (!isNaN(precoPersonalizado)) {
+          url += `&precoPersonalizado=${precoPersonalizado}`;
+        }
+        if (tipoVenda === 'A_PRAZO') {
+          url += `&dataVencimento=${form.val3}`;
+        }
+        const resp = await fetch(url, { method: 'PUT' });
+        if (!resp.ok) alert("Erro ao vender: Estoque insuficiente, data inválida ou erro no servidor");
+      }
       else if (tipo === 'EDITAR_PRECOS') {
         const atacado = parseFloat(form.val1.replace(',', '.'));
         const varejo = parseFloat(form.val2.replace(',', '.'));
         if (!isNaN(atacado) && !isNaN(varejo)) {
           await Promise.all(dados.sabores.map(sabor => {
-            return fetch(`https://tabacaria-system.onrender.com/api/pods/${sabor.id}/precos?atacado=${atacado}&varejo=${varejo}`, { method: 'PUT' });
+            return fetch(`${API_URL}/api/pods/${sabor.id}/precos?atacado=${atacado}&varejo=${varejo}`, { method: 'PUT' });
           }));
         }
       }
@@ -128,10 +150,29 @@ export default function TabelaCatalogo() {
 
   return (
     <div className="space-y-6 relative">
+      <div className="bg-gray-900 border border-purple-500/30 rounded-xl p-4 shadow-lg flex items-center gap-3">
+        <span className="text-xl">🔍</span>
+        <input 
+          type="text" 
+          placeholder="Pesquisar por marca ou sabor..." 
+          value={termoBusca} 
+          onChange={(e) => setTermoBusca(e.target.value)} 
+          className="w-full bg-transparent text-white outline-none placeholder-gray-500"
+        />
+      </div>
       {podsAgrupados.length === 0 ? (
         <div className="text-center p-10 text-gray-500 bg-gray-900 rounded-xl">Nenhum pod cadastrado no estoque.</div>
       ) : (
-        podsAgrupados.map((grupo, index) => (
+        podsAgrupados
+    .map(grupo => {
+       const saboresFiltrados = grupo.sabores.filter(s => 
+         s.sabor.toLowerCase().includes(termoBusca.toLowerCase()) || 
+         grupo.marca.toLowerCase().includes(termoBusca.toLowerCase())
+       );
+       return { ...grupo, sabores: saboresFiltrados };
+    })
+    .filter(grupo => grupo.sabores.length > 0)
+    .map((grupo, index) => (
           <div key={index} className="bg-gray-900 border border-purple-500/30 rounded-xl overflow-hidden shadow-lg flex flex-col md:flex-row">
 
             {/* Resumo da Marca (Esquerda) */}
@@ -185,7 +226,7 @@ export default function TabelaCatalogo() {
 
                       {/* Primeira Linha: Vendas */}
                       <div className="flex items-center gap-2 flex-wrap xl:justify-end">
-                        <button onClick={() => handleVender(sabor.id)} disabled={sabor.estoque === 0} className="flex-1 xl:flex-none bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition-colors">💰 Vender</button>
+                        <button onClick={() => handleVender(sabor, grupo.marca)} disabled={sabor.estoque === 0} className="flex-1 xl:flex-none bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition-colors">💰 Vender</button>
                         <button onClick={() => handleDesfazerVenda(sabor.id, sabor.vendidos)} disabled={sabor.vendidos === 0} className="flex-1 xl:flex-none bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition-colors">↩️ Desfazer</button>
 
                         {/* ABRIR MODAL: VENDA ANTIGA */}
@@ -241,6 +282,7 @@ export default function TabelaCatalogo() {
               <div className="bg-gray-950/80 p-5 border-b border-gray-800 flex justify-between items-start">
                 <div>
                   <h3 className="text-xl font-bold text-gray-100">
+                    {modal.tipo === 'VENDER' && 'Registrar Venda'}
                     {modal.tipo === 'ADICIONAR' && 'Receber Novo Lote'}
                     {modal.tipo === 'AJUSTAR' && 'Ajuste Físico de Estoque'}
                     {modal.tipo === 'VENDA_ANTIGA' && 'Registrar Venda Retroativa'}
@@ -288,6 +330,35 @@ export default function TabelaCatalogo() {
                   </div>
                 )}
 
+                {modal.tipo === 'VENDER' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Tipo de Venda</label>
+                      <select required value={form.val1} onChange={(e) => setForm({...form, val1: e.target.value, val3: e.target.value === 'A_PRAZO' ? form.val3 : ''})} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-purple-500 outline-none">
+                        <option value="A_VISTA">Vender Agora (À Vista)</option>
+                        <option value="A_PRAZO">A Prazo (Fiado)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Preço Cobrado (R$)</label>
+                      <input type="number" step="0.01" required value={form.val2} onChange={(e) => setForm({...form, val2: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-purple-500 outline-none" />
+                    </div>
+                    {form.val1 === 'A_PRAZO' && (
+                      <div>
+                        <label className="block text-sm font-medium text-orange-300 mb-1">Data do pagamento</label>
+                        <input
+                          type="date"
+                          required
+                          value={form.val3}
+                          onChange={(e) => setForm({...form, val3: e.target.value})}
+                          className="w-full bg-gray-800 border border-orange-500/30 rounded-xl px-4 py-3 text-white focus:border-orange-500 outline-none color-scheme-dark"
+                        />
+                        <p className="text-xs text-gray-500 mt-2">Você será avisado 1 dia antes e no dia do vencimento.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 {modal.tipo === 'EDITAR_PRECOS' && (
                   <div className="space-y-4">
                     <div className="bg-purple-900/20 border border-purple-500/20 text-purple-300 p-3 rounded-lg text-sm mb-2">
