@@ -1,6 +1,6 @@
 # # Sistema completo de gestão de estoque, vendas, caixa e relatórios
 
-Sistema completo de gestão de estoque, vendas, caixa e relatórios . O projeto combina um backend em Java com Spring Boot e um frontend em Next.js para gerenciar produtos, vendas, pagamentos e controle financeiro de forma simples e rápida.
+O projeto combina um backend em Java com Spring Boot e um frontend em Next.js para gerenciar produtos, vendas, pagamentos e controle financeiro de forma simples e rápida.
 
 ## Visão geral
 
