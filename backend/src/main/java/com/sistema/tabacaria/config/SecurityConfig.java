@@ -1,5 +1,6 @@
 package com.sistema.tabacaria.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -25,55 +26,51 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(Customizer.withDefaults()) // Permite que o Next.js converse com o Java
-                .csrf(csrf -> csrf.disable())    // Desativa proteção CSRF (necessário para APIs REST)
+                .cors(Customizer.withDefaults())
+                .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().authenticated() // BLOQUEIA TUDO: Só entra quem estiver logado
+                        .anyRequest().authenticated()
                 )
-                .httpBasic(Customizer.withDefaults()); // Configura a autenticação básica via cabeçalho
+                .httpBasic(Customizer.withDefaults());
 
         return http.build();
     }
 
-    // AQUI VOCÊ DEFINE OS 3 USUÁRIOS OFICIAIS DO SISTEMA
     @Bean
-    public UserDetailsService userDetailsService() {
-        UserDetails dono = User.builder()
-                .username("Rafael")
-                .password(passwordEncoder().encode("Pod010203$")) // Troque "senha123" pela sua senha
-                .roles("ADMIN")
-                .build();
+    public UserDetailsService userDetailsService(
+            PasswordEncoder passwordEncoder,
+            @Value("${APP_USER_1_USERNAME}") String username1,
+            @Value("${APP_USER_1_PASSWORD}") String password1,
+            @Value("${APP_USER_2_USERNAME}") String username2,
+            @Value("${APP_USER_2_PASSWORD}") String password2,
+            @Value("${APP_USER_3_USERNAME}") String username3,
+            @Value("${APP_USER_3_PASSWORD}") String password3) {
+        UserDetails user1 = createAdmin(username1, password1, passwordEncoder);
+        UserDetails user2 = createAdmin(username2, password2, passwordEncoder);
+        UserDetails user3 = createAdmin(username3, password3, passwordEncoder);
 
-        UserDetails socio1 = User.builder()
-                .username("Baiano")
-                .password(passwordEncoder().encode("Pod010203$"))
-                .roles("ADMIN")
-                .build();
-
-        UserDetails socio2 = User.builder()
-                .username("Amanda")
-                .password(passwordEncoder().encode("Pod010203$"))
-                .roles("ADMIN")
-                .build();
-
-        return new InMemoryUserDetailsManager(dono, socio1, socio2);
+        return new InMemoryUserDetailsManager(user1, user2, user3);
     }
 
-    // Criptografa as senhas na memória para segurança máxima
+    private UserDetails createAdmin(String username, String password, PasswordEncoder passwordEncoder) {
+        return User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .roles("ADMIN")
+                .build();
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // Libera a passagem APENAS para o endereço do seu Next.js
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Quando for colocar na internet de verdade, colocaremos o link oficial do site aqui:
-        // Trocamos setAllowedOrigins por setAllowedOriginPatterns
         configuration.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:3000",
-                "https://*.vercel.app", // O asterisco libera qualquer link da Vercel
+                "https://*.vercel.app",
                 "https://tabacaria-system.vercel.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
